@@ -1,0 +1,43 @@
+waste_detector_node:
+  ros__parameters:
+    use_camera: true
+    camera_index: 0
+    image_topic: /video_frames
+    publish_topic: /waste_detection_events
+    process_rate_hz: 5.0
+    confidence_threshold: 0.5
+    iou_threshold: 0.45
+    min_publish_interval_sec: 1.0
+
+patrol_navigator_node:
+  ros__parameters:
+    detection_topic: /waste_detection_events
+    sorting_status_topic: /sorting_status
+    system_alerts_topic: /system_alerts
+    cmd_vel_topic: /cmd_vel
+    patrol_linear_speed: 0.2
+    patrol_angular_speed: 0.0
+    publish_rate_hz: 5.0
+
+sorting_servo_node:
+  ros__parameters:
+    detection_topic: /waste_detection_events
+    status_topic: /sorting_status
+    left_gpio: 17
+    right_gpio: 27
+    sweep_angle_deg: 90.0
+    hold_sec: 1.0
+    use_sim: true
+    min_pulse_width_sec: 0.0005
+    max_pulse_width_sec: 0.0025
+
+bin_monitor_node:
+  ros__parameters:
+    system_alerts_topic: /system_alerts
+    trig_gpio: 23
+    echo_gpio: 24
+    poll_interval_sec: 5.0
+    full_threshold_cm: 5.0
+    max_distance_m: 1.0
+    use_sim: true
+    sim_distance_cm: 100.0
