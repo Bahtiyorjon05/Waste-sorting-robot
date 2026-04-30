@@ -6,15 +6,6 @@
 **Hardware:** Raspberry Pi 4, Pi Camera V2, MG996R Servos (x2), HC-SR04 Ultrasonic Sensors.
 
 
-## 🤖 AI Agent Coding Instructions (Read First)
-**Hello AI Coding Agent!** Your task is to write the ROS 2 Python nodes for this autonomous robotics project. We are using a modern AI-first development workflow. Please adhere to the following architecture and constraints when generating the codebase:
-1. **Language:** Python 3.10+ using the `rclpy` library.
-2. **AI Framework:** Use `ultralytics` for YOLOv8 inference and `cv2` (OpenCV) for camera handling.
-3. **Hardware Control:** Use the `gpiozero` library for servo and ultrasonic sensor GPIO control on the Raspberry Pi.
-4. **Style:** Keep nodes modular. Use standard ROS 2 OOP class structures (inheriting from `Node`). Include standard `try/except` blocks for hardware failures.
-
----
-
 ## 🏗️ Software Architecture & Node Breakdown
 
 The system relies on a "Sense-Think-Act" loop. The AI agent must generate the following four independent ROS 2 nodes inside a package named `waste_sorting_hub`:
@@ -86,10 +77,10 @@ source install/setup.bash
 ### 4. Run the System
 To launch all nodes simultaneously using the provided launch file and default configuration:
 ```bash
-ros2 launch waste_sorting_hub main_launch.py
+ros2 launch waste_sorting_hub main_launch.py use_sim:=false use_camera:=true
 ```
 
-*Note:* For real hardware execution on the Raspberry Pi, ensure you set `use_sim: false` in `config/defaults.yaml` or pass parameters at runtime to enable GPIO access.
+*Note:* For WSL2/laptop testing without hardware, use `use_sim:=true use_camera:=false`.
 
 ---
 
@@ -191,7 +182,7 @@ HC-SR04 Ultrasonic
     ```
 4. **Full system check (patrol stop/resume):**
     ```bash
-    ros2 launch waste_sorting_hub main_launch.py
+    ros2 launch waste_sorting_hub main_launch.py use_sim:=true use_camera:=false
     ```
     ```bash
     ros2 topic echo /cmd_vel
