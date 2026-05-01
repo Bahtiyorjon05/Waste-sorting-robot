@@ -120,7 +120,8 @@ class BinMonitor:
     # ------------------------------------------------------------------
     def _read_distance_cm(self) -> float | None:
         if self._sim:
-            return self._sim_distance_cm
+            # Read from the live config dict so hot-reload takes effect
+            return float(self._cfg.get("SIMULATED_BIN_DISTANCE_CM", 100.0))
         if self._sensor is None:
             return None
         try:

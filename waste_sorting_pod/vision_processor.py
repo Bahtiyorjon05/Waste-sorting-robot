@@ -157,14 +157,18 @@ class VisionProcessor:
     # Internal
     # ------------------------------------------------------------------
     def _simulate_detection(self) -> Optional[Dict[str, Any]]:
+        # Re-read from live config dict so hot-reload takes effect
+        sim_label = self._cfg.get("SIMULATED_DETECTION_LABEL", "")
+        sim_interval = float(self._cfg.get("SIMULATED_DETECTION_INTERVAL_SEC", 5.0))
+
         now = time.monotonic()
-        if now - self._last_sim_time < self._sim_interval:
+        if now - self._last_sim_time < sim_interval:
             return None
         self._last_sim_time = now
 
         # If a fixed label is configured, use it; otherwise cycle all classes
-        if self._sim_label:
-            label = self._sim_label
+        if sim_label:
+            label = sim_label
         else:
             label = self._sim_cycle[self._sim_index % len(self._sim_cycle)]
             self._sim_index += 1

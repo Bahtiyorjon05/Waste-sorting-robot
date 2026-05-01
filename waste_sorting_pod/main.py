@@ -15,6 +15,7 @@ Orchestrates the four modules in a continuous Sense-Think-Act loop:
 
 import argparse
 import logging
+import os
 import signal
 import sys
 import time
@@ -56,6 +57,30 @@ def load_config(path: str) -> Dict[str, Any]:
         sys.exit(1)
 
 
+# Hot-reload keys that can be changed at runtime without restart
+_HOT_RELOAD_KEYS = [
+    "SIMULATED_BIN_DISTANCE_CM",
+    "SIMULATED_DETECTION_LABEL",
+    "SIMULATED_DETECTION_INTERVAL_SEC",
+]
+
+
+def hot_reload_config(path: str, config: Dict[str, Any]) -> None:
+    """Re-read the YAML file and update the shared config dict in-place.
+
+    Only updates keys listed in _HOT_RELOAD_KEYS so that hardware-related
+    settings (GPIOs, model path, etc.) are never changed mid-run."""
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            fresh = yaml.safe_load(fh) or {}
+        for key in _HOT_RELOAD_KEYS:
+            if key in fresh and fresh[key] != config.get(key):
+                logger.info("Config hot-reload: %s = %s", key, fresh[key])
+                config[key] = fresh[key]
+    except Exception:
+        pass  # file might be mid-save; skip this cycle
+
+
 # ---------------------------------------------------------------------------
 # Graceful shutdown
 # ---------------------------------------------------------------------------
@@ -71,7 +96,7 @@ def _signal_handler(sig, frame):
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
-def run(config: Dict[str, Any]) -> None:
+def run(config: Dict[str, Any], config_path: str = "config.yaml") -> None:
     """Run the Sense-Think-Act loop until interrupted."""
     vision = VisionProcessor(config)
     servos = ServoController(config)
@@ -79,6 +104,8 @@ def run(config: Dict[str, Any]) -> None:
     log = AsyncLogger(config)
 
     loop_delay: float = 0.1  # seconds between loop iterations
+    reload_interval: float = 2.0  # how often to re-read config.yaml
+    last_reload_time: float = time.monotonic()
 
     logger.info("=" * 60)
     logger.info("  Waste Sorting Pod — RUNNING")
@@ -87,6 +114,12 @@ def run(config: Dict[str, Any]) -> None:
 
     try:
         while not _shutdown_requested:
+            # --- HOT-RELOAD config.yaml ---
+            now = time.monotonic()
+            if now - last_reload_time >= reload_interval:
+                last_reload_time = now
+                hot_reload_config(config_path, config)
+
             # --- SENSE: update bin status ---
             bins.update()
 
@@ -151,7 +184,7 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _signal_handler)
 
     config = load_config(args.config)
-    run(config)
+    run(config, config_path=args.config)
 
 
 if __name__ == "__main__":
