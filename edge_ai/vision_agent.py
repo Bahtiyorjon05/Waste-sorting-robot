@@ -243,12 +243,13 @@ class VisionAgent:
     def detect(self, frame: np.ndarray) -> Optional[Dict[str, Any]]:
         """Classify the frame. Returns {label, confidence, box} or None.
 
-        Uses the real YOLO model when available; otherwise simulates a
-        detection every SIMULATED_DETECTION_INTERVAL_SEC seconds.
+        Real YOLO inference when a camera AND a model are available. In
+        simulation camera mode the whole vision pipeline is simulated, so the
+        full flow (detect -> sort -> log) still demos with no camera.
         """
-        if self._model is not None:
-            return self._detect_yolo(frame)
-        return self._detect_simulated()
+        if self.camera_backend == "simulation" or self._model is None:
+            return self._detect_simulated()
+        return self._detect_yolo(frame)
 
     def _detect_yolo(self, frame: np.ndarray) -> Optional[Dict[str, Any]]:
         try:
