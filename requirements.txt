@@ -1,0 +1,16 @@
+# EcoSort AI - core dependencies (install on BOTH the laptop and the Pi)
+#   pip install -r requirements.txt
+#
+# These all install fine on Windows, so you can develop the dashboard in
+# simulation mode on your laptop before touching the hardware.
+
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pyyaml>=6.0
+numpy>=1.24
+opencv-python>=4.8
+SQLAlchemy>=2.0
+
+# YOLOv8 inference. Heavy (pulls in PyTorch). The app still runs without it
+# in simulation mode -- comment this out for a quick laptop demo if you like.
+ultralytics>=8.1

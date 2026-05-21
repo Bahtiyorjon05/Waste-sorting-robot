@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<!--
+  EcoSort AI - live monitoring dashboard
+  Self-contained: no external CSS/JS, works fully offline (good for demos).
+  Open it from your laptop at  http://<raspberry-pi-ip>:8000
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EcoSort AI - Live Dashboard</title>
+<style>
+  :root {
+    --bg:#0e1116; --panel:#181c23; --panel2:#1f242d; --line:#2a313c;
+    --text:#e6e9ef; --muted:#8b95a5;
+    --green:#3ddc84; --blue:#2bb3e8; --red:#ff5d5d; --amber:#ffb443;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    background:var(--bg); color:var(--text);
+    font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding:18px; min-height:100vh;
+  }
+  a { color:var(--blue); }
+
+  /* ---- header ---- */
+  header {
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:12px; margin-bottom:16px;
+  }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .brand h1 { font-size:22px; font-weight:700; letter-spacing:.3px; }
+  .leaf { font-size:26px; }
+  .brand small { color:var(--muted); display:block; font-weight:400; font-size:12px; }
+  .badges { display:flex; gap:8px; flex-wrap:wrap; }
+  .badge {
+    background:var(--panel2); border:1px solid var(--line); border-radius:999px;
+    padding:5px 12px; font-size:12px; color:var(--muted);
+  }
+  .badge b { color:var(--text); font-weight:600; }
+  .badge.live { color:var(--green); border-color:#214a32; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%;
+         background:var(--red); margin-right:6px; vertical-align:middle; }
+  .dot.on { background:var(--green); box-shadow:0 0 8px var(--green); }
+
+  /* ---- layout ---- */
+  .grid {
+    display:grid; grid-template-columns:2fr 1fr; gap:16px;
+  }
+  @media (max-width:900px){ .grid { grid-template-columns:1fr; } }
+  .panel {
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:16px;
+  }
+  .panel h2 {
+    font-size:12px; text-transform:uppercase; letter-spacing:1.2px;
+    color:var(--muted); margin-bottom:12px; font-weight:600;
+  }
+  .col { display:flex; flex-direction:column; gap:16px; }
+
+  /* ---- video ---- */
+  .videowrap {
+    position:relative; background:#000; border-radius:10px; overflow:hidden;
+    aspect-ratio:4/3;
+  }
+  .videowrap img { width:100%; height:100%; object-fit:contain; display:block; }
+
+  /* ---- detection ---- */
+  .det-label { font-size:30px; font-weight:800; letter-spacing:.5px; }
+  .det-idle  { font-size:18px; color:var(--muted); font-weight:600; }
+  .bar { background:var(--panel2); border-radius:6px; height:10px; margin-top:10px; overflow:hidden; }
+  .bar > i { display:block; height:100%; width:0%; background:var(--blue);
+             transition:width .3s ease; }
+  .conf-txt { font-size:12px; color:var(--muted); margin-top:6px; }
+
+  /* ---- servo tilt visual ---- */
+  .tilt-stage { padding:18px 6px 6px; }
+  .tilt-track { display:flex; justify-content:space-between; font-size:11px;
+                color:var(--muted); margin-bottom:6px; }
+  .pivot { display:flex; align-items:flex-end; justify-content:center; height:70px; }
+  .platform {
+    width:170px; height:12px; border-radius:6px;
+    background:linear-gradient(90deg,var(--blue),var(--green));
+    transition:transform .5s cubic-bezier(.5,.05,.2,1);
+    transform-origin:center bottom;
+  }
+  .platform.left  { transform:rotate(-20deg); }
+  .platform.right { transform:rotate(20deg); }
+  .post { width:10px; height:22px; background:var(--line); border-radius:3px;
+          margin:0 auto; }
+  .servo-state { text-align:center; font-weight:700; margin-top:10px; font-size:15px; }
+
+  /* ---- stat tiles ---- */
+  .tiles { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .tile { background:var(--panel2); border-radius:10px; padding:12px; text-align:center; }
+  .tile .n { font-size:24px; font-weight:800; }
+  .tile .k { font-size:11px; color:var(--muted); text-transform:uppercase;
+             letter-spacing:.6px; margin-top:2px; }
+  .plastic { color:var(--blue); }
+  .paper   { color:var(--green); }
+
+  /* ---- bin ---- */
+  .bin-row { display:flex; align-items:center; justify-content:space-between; }
+  .pill { padding:5px 12px; border-radius:999px; font-weight:700; font-size:13px; }
+  .pill.ok   { background:#173a26; color:var(--green); }
+  .pill.full { background:#3a1a1a; color:var(--red); }
+
+  /* ---- feedback ---- */
+  .fb-q { font-size:13px; color:var(--muted); margin-bottom:10px; }
+  .fb-btns { display:flex; gap:10px; }
+  .fb {
+    flex:1; padding:12px; font-size:20px; border-radius:10px; cursor:pointer;
+    border:1px solid var(--line); background:var(--panel2); color:var(--text);
+    transition:transform .1s ease, background .15s ease;
+  }
+  .fb:hover:not(:disabled) { transform:translateY(-2px); }
+  .fb.up:hover:not(:disabled)   { background:#173a26; }
+  .fb.down:hover:not(:disabled) { background:#3a1a1a; }
+  .fb:disabled { opacity:.4; cursor:not-allowed; }
+  .fb-msg { font-size:12px; margin-top:8px; min-height:16px; color:var(--green); }
+
+  /* ---- log ---- */
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-size:11px; text-transform:uppercase;
+       letter-spacing:.6px; }
+  td.lbl { font-weight:700; }
+  .empty { color:var(--muted); padding:14px 10px; font-size:13px; }
+  footer { color:var(--muted); font-size:12px; text-align:center; margin-top:18px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="leaf">&#127807;</span>
+    <div>
+      <h1>EcoSort AI</h1>
+      <small>Intelligent Waste Classification &middot; VIP Capstone, Inha University</small>
+    </div>
+  </div>
+  <div class="badges">
+    <span class="badge live" id="b-conn"><span class="dot" id="dot"></span><span id="conn">connecting</span></span>
+    <span class="badge">camera <b id="b-cam">-</b></span>
+    <span class="badge">servo <b id="b-servo">-</b></span>
+    <span class="badge">model <b id="b-model">-</b></span>
+    <span class="badge"><b id="b-fps">0</b> FPS</span>
+    <span class="badge">up <b id="b-up">0s</b></span>
+  </div>
+</header>
+
+<div class="grid">
+  <!-- LEFT: live video -->
+  <div class="panel">
+    <h2>Live Camera Feed</h2>
+    <div class="videowrap">
+      <img id="stream" src="/api/stream" alt="live feed" />
+    </div>
+  </div>
+
+  <!-- RIGHT: status panels -->
+  <div class="col">
+
+    <div class="panel">
+      <h2>Current Detection</h2>
+      <div id="det-idle" class="det-idle">Waiting for an item&hellip;</div>
+      <div id="det-box" style="display:none">
+        <div class="det-label" id="det-label">-</div>
+        <div class="bar"><i id="det-bar"></i></div>
+        <div class="conf-txt" id="det-conf">-</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Sorting Platform</h2>
+      <div class="tilt-stage">
+        <div class="tilt-track">
+          <span>&#11013;&#65039; PLASTIC</span><span>PAPER &#10145;&#65039;</span>
+        </div>
+        <div class="pivot"><div class="platform" id="platform"></div></div>
+        <div class="post"></div>
+        <div class="servo-state" id="servo-state">FLAT</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Bin Status</h2>
+      <div class="bin-row">
+        <span class="pill ok" id="bin-pill">OK</span>
+        <span class="conf-txt" id="bin-dist">- cm</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="grid" style="margin-top:16px">
+  <!-- session stats + feedback -->
+  <div class="col">
+    <div class="panel">
+      <h2>Session Totals</h2>
+      <div class="tiles">
+        <div class="tile"><div class="n plastic" id="s-plastic">0</div><div class="k">Plastic</div></div>
+        <div class="tile"><div class="n paper"   id="s-paper">0</div><div class="k">Paper</div></div>
+        <div class="tile"><div class="n"         id="s-total">0</div><div class="k">Total</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Help the AI Learn</h2>
+      <div class="fb-q" id="fb-q">No sort to review yet.</div>
+      <div class="fb-btns">
+        <button class="fb up"   id="fb-up"   disabled>&#128077;</button>
+        <button class="fb down" id="fb-down" disabled>&#128078;</button>
+      </div>
+      <div class="fb-msg" id="fb-msg"></div>
+    </div>
+  </div>
+
+  <!-- log -->
+  <div class="panel">
+    <h2>Recent Sorts</h2>
+    <table>
+      <thead><tr><th>Time</th><th>Class</th><th>Conf.</th><th>Action</th></tr></thead>
+      <tbody id="log"><tr><td class="empty" colspan="4">No sorts yet&hellip;</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<footer>EcoSort AI &middot; Sense &rarr; Think &rarr; Act &middot; the Pi runs everything, this page is just the window.</footer>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+
+  var lastSortId = null;      // most recent sort id from the backend
+  var reviewedId = null;      // sort id the user already gave feedback on
+
+  function fmtUptime(s) {
+    s = s | 0;
+    var h = (s / 3600) | 0, m = ((s % 3600) / 60) | 0, ss = s % 60;
+    if (h) return h + "h " + m + "m";
+    if (m) return m + "m " + ss + "s";
+    return ss + "s";
+  }
+
+  function setConn(ok) {
+    $("dot").className = "dot" + (ok ? " on" : "");
+    $("conn").textContent = ok ? "live" : "reconnecting";
+    $("b-conn").className = "badge" + (ok ? " live" : "");
+  }
+
+  function render(s) {
+    // backends / header
+    if (s.backends) {
+      $("b-cam").textContent = s.backends.camera || "-";
+      $("b-servo").textContent = s.backends.servo || "-";
+      $("b-model").textContent = s.backends.model || "-";
+    }
+    $("b-fps").textContent = s.fps != null ? s.fps : 0;
+    $("b-up").textContent = fmtUptime(s.uptime_sec);
+
+    // current detection
+    if (s.detection) {
+      $("det-idle").style.display = "none";
+      $("det-box").style.display = "block";
+      var cls = s.detection.label;
+      var conf = Math.round((s.detection.confidence || 0) * 100);
+      var el = $("det-label");
+      el.textContent = cls;
+      el.className = "det-label " + (cls === "PLASTIC" ? "plastic" : "paper");
+      var bar = $("det-bar");
+      bar.style.width = conf + "%";
+      bar.style.background = cls === "PLASTIC"
+        ? "var(--blue)" : "var(--green)";
+      $("det-conf").textContent = "confidence " + conf + "%";
+    } else {
+      $("det-idle").style.display = "block";
+      $("det-box").style.display = "none";
+    }
+
+    // servo platform tilt
+    var st = s.servo_state || "FLAT";
+    var plat = $("platform");
+    plat.className = "platform" +
+      (st === "TILT LEFT" ? " left" : st === "TILT RIGHT" ? " right" : "");
+    $("servo-state").textContent = st;
+
+    // bin
+    var pill = $("bin-pill");
+    if (s.bin_full) { pill.className = "pill full"; pill.textContent = "FULL"; }
+    else            { pill.className = "pill ok";   pill.textContent = "OK"; }
+    $("bin-dist").textContent =
+      (s.bin_distance_cm != null ? s.bin_distance_cm.toFixed(1) : "-") + " cm";
+
+    // stats
+    if (s.stats) {
+      $("s-plastic").textContent = s.stats.PLASTIC || 0;
+      $("s-paper").textContent = s.stats.PAPER || 0;
+      $("s-total").textContent = s.stats.total || 0;
+    }
+
+    // recent sorts log
+    var log = $("log");
+    if (s.events && s.events.length) {
+      log.innerHTML = s.events.map(function (e) {
+        var c = e.label === "PLASTIC" ? "plastic" : "paper";
+        return "<tr><td>" + e.timestamp + "</td>" +
+               "<td class='lbl " + c + "'>" + e.label + "</td>" +
+               "<td>" + Math.round((e.confidence || 0) * 100) + "%</td>" +
+               "<td>" + e.servo_action + "</td></tr>";
+      }).join("");
+    } else {
+      log.innerHTML = "<tr><td class='empty' colspan='4'>No sorts yet&hellip;</td></tr>";
+    }
+
+    // feedback availability
+    lastSortId = s.last_sort_id;
+    if (lastSortId != null && lastSortId !== reviewedId) {
+      var last = (s.events && s.events[0]) || null;
+      $("fb-q").textContent = last
+        ? "Was sort #" + lastSortId + " (" + last.label + ") correct?"
+        : "Was the last sort correct?";
+      $("fb-up").disabled = false;
+      $("fb-down").disabled = false;
+      $("fb-msg").textContent = "";
+    } else if (lastSortId == null) {
+      $("fb-q").textContent = "No sort to review yet.";
+    }
+  }
+
+  function sendFeedback(verdict) {
+    if (lastSortId == null) return;
+    var id = lastSortId;
+    $("fb-up").disabled = true;
+    $("fb-down").disabled = true;
+    fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sort_id: id, verdict: verdict })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      reviewedId = id;
+      $("fb-msg").style.color = verdict === "up" ? "var(--green)" : "var(--amber)";
+      $("fb-msg").textContent = verdict === "up"
+        ? "Thanks - logged as correct."
+        : "Saved for retraining. Thanks!";
+    })
+    .catch(function () {
+      $("fb-msg").style.color = "var(--red)";
+      $("fb-msg").textContent = "Could not send feedback.";
+    });
+  }
+
+  $("fb-up").addEventListener("click", function () { sendFeedback("up"); });
+  $("fb-down").addEventListener("click", function () { sendFeedback("down"); });
+
+  // --- live status feed (Server-Sent Events) ---
+  function connect() {
+    var es = new EventSource("/api/events");
+    es.onopen = function () { setConn(true); };
+    es.onmessage = function (ev) {
+      setConn(true);
+      try { render(JSON.parse(ev.data)); } catch (e) {}
+    };
+    es.onerror = function () {
+      setConn(false);
+      es.close();
+      setTimeout(connect, 2000);   // auto-reconnect
+    };
+  }
+  connect();
+
+  // if the MJPEG stream stalls, kick it
+  $("stream").addEventListener("error", function () {
+    var img = $("stream");
+    setTimeout(function () { img.src = "/api/stream?t=" + Date.now(); }, 1500);
+  });
+})();
+</script>
+</body>
+</html>

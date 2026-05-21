@@ -1,0 +1,5 @@
+# Place your trained YOLOv8 model here, e.g. yolov8n_waste.pt
+# The path is set by MODEL_PATH in config.yaml.
+#
+# Without a model file the system still runs: set CAMERA_BACKEND to
+# "simulation" (or run on the laptop with no camera) to see the full flow.

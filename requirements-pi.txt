@@ -1,0 +1,16 @@
+# EcoSort AI - Raspberry Pi ONLY hardware dependencies.
+# Install these on the Pi IN ADDITION to requirements.txt.
+#
+# picamera2 is best installed with apt, not pip:
+#   sudo apt update
+#   sudo apt install -y python3-picamera2 python3-libcamera
+#
+# Then for the rest:
+#   pip install -r requirements-pi.txt
+#
+# None of these install on Windows -- that is expected. On the laptop the app
+# detects they are missing and runs in simulation mode automatically.
+
+gpiozero>=2.0
+lgpio>=0.2          # modern GPIO backend for gpiozero on Pi 4 / Pi 5
+pyserial>=3.5       # only needed if SERVO_BACKEND is "arduino"

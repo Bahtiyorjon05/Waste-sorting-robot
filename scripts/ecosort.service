@@ -1,0 +1,35 @@
+# =============================================================================
+# EcoSort AI - systemd service (auto-start on power-up)
+# =============================================================================
+# This makes the robot launch itself whenever the Pi boots -- no laptop needed
+# to start it. Install it like this (on the Pi):
+#
+#   1. Edit the two paths below if your username is not "pi" or your project
+#      folder is not  /home/pi/ecosort-ai
+#
+#   2. Copy it into systemd and enable it:
+#        sudo cp scripts/ecosort.service /etc/systemd/system/ecosort.service
+#        sudo systemctl daemon-reload
+#        sudo systemctl enable ecosort.service
+#        sudo systemctl start ecosort.service
+#
+#   3. Check it / view logs:
+#        systemctl status ecosort.service
+#        journalctl -u ecosort.service -f
+# =============================================================================
+
+[Unit]
+Description=EcoSort AI - intelligent waste sorter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/ecosort-ai
+ExecStart=/home/pi/ecosort-ai/.venv/bin/python -m backend.main
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
