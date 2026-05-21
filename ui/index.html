@@ -1,213 +1,342 @@
 <!DOCTYPE html>
 <!--
   EcoSort AI - live monitoring dashboard
-  Self-contained: no external CSS/JS, works fully offline (good for demos).
-  Open it from your laptop at  http://<raspberry-pi-ip>:8000
+  Self-contained: no external CSS/JS/fonts, works fully offline.
+  Open from your laptop at  http://<raspberry-pi-ip>:8000
 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>EcoSort AI - Live Dashboard</title>
+<title>EcoSort AI — Live Dashboard</title>
 <style>
   :root {
-    --bg:#0e1116; --panel:#181c23; --panel2:#1f242d; --line:#2a313c;
-    --text:#e6e9ef; --muted:#8b95a5;
-    --green:#3ddc84; --blue:#2bb3e8; --red:#ff5d5d; --amber:#ffb443;
+    --bg:#0b1110;        --card:#141d19;      --card2:#1b2621;
+    --line:#26342c;      --line2:#324339;
+    --text:#e9efec;      --muted:#889a91;     --faint:#5d6f66;
+    --green:#34d399;     --green-dim:#123528;
+    --blue:#38bdf8;      --blue-dim:#0c3142;
+    --amber:#fbbf24;     --amber-dim:#3f2f08;
+    --red:#f87171;       --red-dim:#3a1a1a;
+    --radius:16px;
+    --shadow:0 6px 24px rgba(0,0,0,.35);
   }
   * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { height:100%; }
   body {
-    background:var(--bg); color:var(--text);
-    font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    padding:18px; min-height:100vh;
+    background:
+      radial-gradient(900px 500px at 80% -8%, rgba(52,211,153,.10), transparent 70%),
+      radial-gradient(700px 500px at 0% 0%, rgba(56,189,248,.06), transparent 65%),
+      var(--bg);
+    color:var(--text);
+    font-family:"Segoe UI",Roboto,-apple-system,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100%;
   }
-  a { color:var(--blue); }
+  .wrap { max-width:1280px; margin:0 auto; padding:20px 22px 40px; }
 
-  /* ---- header ---- */
-  header {
+  /* ---------- app bar ---------- */
+  .appbar {
     display:flex; align-items:center; justify-content:space-between;
-    flex-wrap:wrap; gap:12px; margin-bottom:16px;
+    gap:16px; flex-wrap:wrap; padding:14px 18px; margin-bottom:20px;
+    background:linear-gradient(180deg,var(--card2),var(--card));
+    border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow);
   }
-  .brand { display:flex; align-items:center; gap:12px; }
-  .brand h1 { font-size:22px; font-weight:700; letter-spacing:.3px; }
-  .leaf { font-size:26px; }
-  .brand small { color:var(--muted); display:block; font-weight:400; font-size:12px; }
-  .badges { display:flex; gap:8px; flex-wrap:wrap; }
-  .badge {
-    background:var(--panel2); border:1px solid var(--line); border-radius:999px;
-    padding:5px 12px; font-size:12px; color:var(--muted);
+  .brand { display:flex; align-items:center; gap:13px; }
+  .logo {
+    width:44px; height:44px; border-radius:12px; display:grid; place-items:center;
+    font-size:24px;
+    background:linear-gradient(135deg,var(--green),#0f9b6c);
+    box-shadow:0 4px 14px rgba(52,211,153,.4);
   }
-  .badge b { color:var(--text); font-weight:600; }
-  .badge.live { color:var(--green); border-color:#214a32; }
-  .dot { display:inline-block; width:8px; height:8px; border-radius:50%;
-         background:var(--red); margin-right:6px; vertical-align:middle; }
-  .dot.on { background:var(--green); box-shadow:0 0 8px var(--green); }
+  .brand h1 { font-size:19px; font-weight:700; letter-spacing:.2px; }
+  .brand p { font-size:11.5px; color:var(--muted); margin-top:1px; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .chip {
+    display:flex; align-items:center; gap:6px;
+    background:var(--card); border:1px solid var(--line); border-radius:999px;
+    padding:6px 12px; font-size:11.5px; color:var(--muted); white-space:nowrap;
+  }
+  .chip b { color:var(--text); font-weight:600; }
+  .chip.live { border-color:var(--green-dim); color:var(--green); }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--red); }
+  .dot.on { background:var(--green); animation:pulse 1.8s infinite; }
+  @keyframes pulse {
+    0%   { box-shadow:0 0 0 0 rgba(52,211,153,.55); }
+    70%  { box-shadow:0 0 0 7px rgba(52,211,153,0); }
+    100% { box-shadow:0 0 0 0 rgba(52,211,153,0); }
+  }
 
-  /* ---- layout ---- */
-  .grid {
-    display:grid; grid-template-columns:2fr 1fr; gap:16px;
+  /* ---------- layout ---------- */
+  .grid-main { display:grid; grid-template-columns:1.65fr 1fr; gap:18px; }
+  .grid-bottom {
+    display:grid; grid-template-columns:1.2fr 1fr; gap:18px; margin-top:18px;
   }
-  @media (max-width:900px){ .grid { grid-template-columns:1fr; } }
-  .panel {
-    background:var(--panel); border:1px solid var(--line);
-    border-radius:14px; padding:16px;
+  .col { display:flex; flex-direction:column; gap:18px; }
+  @media (max-width:920px) {
+    .grid-main, .grid-bottom { grid-template-columns:1fr; }
   }
-  .panel h2 {
-    font-size:12px; text-transform:uppercase; letter-spacing:1.2px;
-    color:var(--muted); margin-bottom:12px; font-weight:600;
-  }
-  .col { display:flex; flex-direction:column; gap:16px; }
 
-  /* ---- video ---- */
+  /* ---------- card ---------- */
+  .card {
+    background:linear-gradient(180deg,var(--card2),var(--card));
+    border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:18px;
+  }
+  .card-h {
+    display:flex; align-items:center; gap:8px; margin-bottom:14px;
+    font-size:11px; font-weight:700; letter-spacing:1.4px;
+    text-transform:uppercase; color:var(--muted);
+  }
+  .card-h .ic { font-size:14px; }
+
+  /* ---------- video ---------- */
   .videowrap {
-    position:relative; background:#000; border-radius:10px; overflow:hidden;
-    aspect-ratio:4/3;
+    position:relative; background:#000; border-radius:12px; overflow:hidden;
+    aspect-ratio:4/3; border:1px solid var(--line2);
   }
   .videowrap img { width:100%; height:100%; object-fit:contain; display:block; }
-
-  /* ---- detection ---- */
-  .det-label { font-size:30px; font-weight:800; letter-spacing:.5px; }
-  .det-idle  { font-size:18px; color:var(--muted); font-weight:600; }
-  .bar { background:var(--panel2); border-radius:6px; height:10px; margin-top:10px; overflow:hidden; }
-  .bar > i { display:block; height:100%; width:0%; background:var(--blue);
-             transition:width .3s ease; }
-  .conf-txt { font-size:12px; color:var(--muted); margin-top:6px; }
-
-  /* ---- servo tilt visual ---- */
-  .tilt-stage { padding:18px 6px 6px; }
-  .tilt-track { display:flex; justify-content:space-between; font-size:11px;
-                color:var(--muted); margin-bottom:6px; }
-  .pivot { display:flex; align-items:flex-end; justify-content:center; height:70px; }
-  .platform {
-    width:170px; height:12px; border-radius:6px;
-    background:linear-gradient(90deg,var(--blue),var(--green));
-    transition:transform .5s cubic-bezier(.5,.05,.2,1);
-    transform-origin:center bottom;
+  .vid-tag {
+    position:absolute; left:12px; top:12px;
+    display:flex; align-items:center; gap:7px;
+    background:rgba(11,17,16,.82); backdrop-filter:blur(4px);
+    border:1px solid var(--line2); border-radius:999px;
+    padding:6px 12px; font-size:12px; font-weight:600;
   }
-  .platform.left  { transform:rotate(-20deg); }
-  .platform.right { transform:rotate(20deg); }
-  .post { width:10px; height:22px; background:var(--line); border-radius:3px;
-          margin:0 auto; }
-  .servo-state { text-align:center; font-weight:700; margin-top:10px; font-size:15px; }
+  .vid-tag .d { width:7px; height:7px; border-radius:50%; background:var(--green); }
 
-  /* ---- stat tiles ---- */
-  .tiles { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
-  .tile { background:var(--panel2); border-radius:10px; padding:12px; text-align:center; }
-  .tile .n { font-size:24px; font-weight:800; }
-  .tile .k { font-size:11px; color:var(--muted); text-transform:uppercase;
-             letter-spacing:.6px; margin-top:2px; }
+  /* ---------- detection ---------- */
+  .detect-row { display:flex; align-items:center; gap:18px; }
+  .ring {
+    --pct:0; --c:var(--faint);
+    position:relative;
+    width:104px; height:104px; border-radius:50%; flex-shrink:0;
+    background:conic-gradient(var(--c) calc(var(--pct)*1%), var(--card) 0);
+    display:grid; place-items:center;
+    transition:background .4s ease;
+  }
+  .ring::after {
+    content:""; position:absolute; inset:13px;
+    border-radius:50%; background:var(--card2);
+    border:1px solid var(--line);
+  }
+  .ring span { position:relative; z-index:1; font-size:22px; font-weight:800; }
+  .detect-info { min-width:0; }
+  .detect-label { font-size:30px; font-weight:800; letter-spacing:.4px; line-height:1; }
+  .detect-sub { font-size:12.5px; color:var(--muted); margin-top:7px; }
+  .detect-idle { font-size:16px; color:var(--muted); font-weight:600; padding:14px 0; }
   .plastic { color:var(--blue); }
-  .paper   { color:var(--green); }
+  .paper   { color:var(--amber); }
 
-  /* ---- bin ---- */
-  .bin-row { display:flex; align-items:center; justify-content:space-between; }
-  .pill { padding:5px 12px; border-radius:999px; font-weight:700; font-size:13px; }
-  .pill.ok   { background:#173a26; color:var(--green); }
-  .pill.full { background:#3a1a1a; color:var(--red); }
-
-  /* ---- feedback ---- */
-  .fb-q { font-size:13px; color:var(--muted); margin-bottom:10px; }
-  .fb-btns { display:flex; gap:10px; }
-  .fb {
-    flex:1; padding:12px; font-size:20px; border-radius:10px; cursor:pointer;
-    border:1px solid var(--line); background:var(--panel2); color:var(--text);
-    transition:transform .1s ease, background .15s ease;
+  /* ---------- tilting platform visual ---------- */
+  .stage { padding:6px 4px 2px; }
+  .stage-top {
+    display:flex; justify-content:space-between;
+    font-size:11px; font-weight:700; letter-spacing:.5px; color:var(--muted);
+    margin-bottom:4px;
   }
-  .fb:hover:not(:disabled) { transform:translateY(-2px); }
-  .fb.up:hover:not(:disabled)   { background:#173a26; }
-  .fb.down:hover:not(:disabled) { background:#3a1a1a; }
-  .fb:disabled { opacity:.4; cursor:not-allowed; }
-  .fb-msg { font-size:12px; margin-top:8px; min-height:16px; color:var(--green); }
+  .seesaw { position:relative; height:96px; }
+  .platform {
+    position:absolute; left:50%; top:30px; width:240px; height:14px;
+    margin-left:-120px; border-radius:8px;
+    background:linear-gradient(90deg,var(--blue),var(--green),var(--amber));
+    transform-origin:50% 100%; transform:rotate(0deg);
+    transition:transform .6s cubic-bezier(.34,1.2,.4,1);
+    box-shadow:0 6px 16px rgba(0,0,0,.45);
+  }
+  .platform.left  { transform:rotate(-22deg); }
+  .platform.right { transform:rotate(22deg); }
+  .pivot {
+    position:absolute; left:50%; top:42px; margin-left:-13px;
+    width:0; height:0; border-left:13px solid transparent;
+    border-right:13px solid transparent; border-bottom:30px solid var(--line2);
+  }
+  .bins { display:flex; justify-content:space-between; gap:14px; margin-top:6px; }
+  .bin {
+    flex:1; text-align:center; padding:10px 6px; border-radius:11px;
+    background:var(--card); border:1px solid var(--line);
+    font-size:11px; font-weight:700; letter-spacing:.4px; color:var(--faint);
+    transition:all .3s ease;
+  }
+  .bin .bicon { font-size:17px; display:block; margin-bottom:3px; filter:grayscale(1) opacity(.5); }
+  .bin.active-l { border-color:var(--blue); color:var(--blue);
+                  background:var(--blue-dim); box-shadow:0 0 16px rgba(56,189,248,.25); }
+  .bin.active-r { border-color:var(--amber); color:var(--amber);
+                  background:var(--amber-dim); box-shadow:0 0 16px rgba(251,191,36,.25); }
+  .bin.active-l .bicon, .bin.active-r .bicon { filter:none; }
+  .servo-state {
+    text-align:center; margin-top:12px; font-size:13px; font-weight:700;
+    color:var(--muted);
+  }
 
-  /* ---- log ---- */
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
-  th { color:var(--muted); font-size:11px; text-transform:uppercase;
-       letter-spacing:.6px; }
-  td.lbl { font-weight:700; }
-  .empty { color:var(--muted); padding:14px 10px; font-size:13px; }
-  footer { color:var(--muted); font-size:12px; text-align:center; margin-top:18px; }
+  /* ---------- bin status ---------- */
+  .binrow { display:flex; align-items:center; justify-content:space-between; }
+  .pill { padding:6px 14px; border-radius:999px; font-weight:700; font-size:12.5px; }
+  .pill.ok   { background:var(--green-dim); color:var(--green); }
+  .pill.full { background:var(--red-dim);   color:var(--red); }
+  .binrow .dist { font-size:12.5px; color:var(--muted); }
+
+  /* ---------- stats ---------- */
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .stat {
+    background:var(--card); border:1px solid var(--line);
+    border-radius:13px; padding:16px 14px; position:relative; overflow:hidden;
+  }
+  .stat .bign { font-size:34px; font-weight:800; line-height:1; }
+  .stat .lab {
+    font-size:10.5px; text-transform:uppercase; letter-spacing:1px;
+    color:var(--muted); margin-top:7px;
+  }
+  .stat .edge {
+    position:absolute; left:0; top:0; bottom:0; width:4px;
+  }
+  .stat.s-plastic .edge { background:var(--blue); }
+  .stat.s-paper   .edge { background:var(--amber); }
+  .stat.s-total   .edge { background:var(--green); }
+
+  /* ---------- log feed ---------- */
+  .feed { display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto; }
+  .feed::-webkit-scrollbar { width:6px; }
+  .feed::-webkit-scrollbar-thumb { background:var(--line2); border-radius:3px; }
+  .logrow {
+    display:flex; align-items:center; gap:12px; padding:10px 12px;
+    background:var(--card); border:1px solid var(--line);
+    border-left:3px solid var(--faint); border-radius:10px;
+    animation:slidein .35s ease;
+  }
+  @keyframes slidein { from { opacity:0; transform:translateY(-6px); } to { opacity:1; } }
+  .logrow.l-plastic { border-left-color:var(--blue); }
+  .logrow.l-paper   { border-left-color:var(--amber); }
+  .logrow .lr-label { font-weight:700; font-size:13px; min-width:66px; }
+  .logrow .lr-conf  { font-size:12px; color:var(--muted); }
+  .logrow .lr-act   { margin-left:auto; font-size:11px; color:var(--faint); }
+  .logrow .lr-time  { font-size:11px; color:var(--faint); font-variant-numeric:tabular-nums; }
+  .empty { color:var(--faint); font-size:13px; padding:20px; text-align:center; }
+
+  /* ---------- feedback ---------- */
+  .fb-q { font-size:13px; color:var(--muted); margin-bottom:12px; line-height:1.5; }
+  .fb-q b { color:var(--text); }
+  .fb-btns { display:flex; gap:11px; }
+  .fb {
+    flex:1; padding:14px; font-size:22px; border-radius:12px; cursor:pointer;
+    border:1px solid var(--line); background:var(--card); color:var(--text);
+    transition:transform .12s ease, background .15s ease, border-color .15s ease;
+  }
+  .fb:hover:not(:disabled) { transform:translateY(-3px); }
+  .fb.up:hover:not(:disabled)   { background:var(--green-dim); border-color:var(--green); }
+  .fb.down:hover:not(:disabled) { background:var(--red-dim);   border-color:var(--red); }
+  .fb:disabled { opacity:.35; cursor:not-allowed; }
+  .fb-msg { font-size:12px; margin-top:10px; min-height:16px; font-weight:600; }
+
+  footer {
+    margin-top:26px; text-align:center; color:var(--faint); font-size:11.5px;
+    line-height:1.7;
+  }
+  footer b { color:var(--muted); }
 </style>
 </head>
 <body>
+<div class="wrap">
 
-<header>
-  <div class="brand">
-    <span class="leaf">&#127807;</span>
-    <div>
-      <h1>EcoSort AI</h1>
-      <small>Intelligent Waste Classification &middot; VIP Capstone, Inha University</small>
+  <!-- ===== app bar ===== -->
+  <header class="appbar">
+    <div class="brand">
+      <div class="logo">&#127807;</div>
+      <div>
+        <h1>EcoSort AI</h1>
+        <p>Intelligent Waste Classification &middot; VIP Capstone, Inha University</p>
+      </div>
     </div>
-  </div>
-  <div class="badges">
-    <span class="badge live" id="b-conn"><span class="dot" id="dot"></span><span id="conn">connecting</span></span>
-    <span class="badge">camera <b id="b-cam">-</b></span>
-    <span class="badge">servo <b id="b-servo">-</b></span>
-    <span class="badge">model <b id="b-model">-</b></span>
-    <span class="badge"><b id="b-fps">0</b> FPS</span>
-    <span class="badge">up <b id="b-up">0s</b></span>
-  </div>
-</header>
-
-<div class="grid">
-  <!-- LEFT: live video -->
-  <div class="panel">
-    <h2>Live Camera Feed</h2>
-    <div class="videowrap">
-      <img id="stream" src="/api/stream" alt="live feed" />
+    <div class="chips">
+      <span class="chip live" id="c-conn"><span class="dot" id="dot"></span>
+        <b id="conn">connecting</b></span>
+      <span class="chip">&#128247;&nbsp;<b id="c-cam">-</b></span>
+      <span class="chip">&#9881;&#65039;&nbsp;<b id="c-servo">-</b></span>
+      <span class="chip">&#129504;&nbsp;<b id="c-model">-</b></span>
+      <span class="chip"><b id="c-fps">0</b>&nbsp;fps</span>
+      <span class="chip">&#9201;&#65039;&nbsp;<b id="c-up">0s</b></span>
     </div>
-  </div>
+  </header>
 
-  <!-- RIGHT: status panels -->
-  <div class="col">
+  <!-- ===== main grid ===== -->
+  <div class="grid-main">
 
-    <div class="panel">
-      <h2>Current Detection</h2>
-      <div id="det-idle" class="det-idle">Waiting for an item&hellip;</div>
-      <div id="det-box" style="display:none">
-        <div class="det-label" id="det-label">-</div>
-        <div class="bar"><i id="det-bar"></i></div>
-        <div class="conf-txt" id="det-conf">-</div>
+    <!-- live camera -->
+    <div class="card">
+      <div class="card-h"><span class="ic">&#128250;</span> Live Camera Feed</div>
+      <div class="videowrap">
+        <img id="stream" src="/api/stream" alt="live feed" />
+        <div class="vid-tag"><span class="d"></span><span id="vid-tag-txt">streaming</span></div>
       </div>
     </div>
 
-    <div class="panel">
-      <h2>Sorting Platform</h2>
-      <div class="tilt-stage">
-        <div class="tilt-track">
-          <span>&#11013;&#65039; PLASTIC</span><span>PAPER &#10145;&#65039;</span>
+    <!-- right column -->
+    <div class="col">
+      <div class="card">
+        <div class="card-h"><span class="ic">&#127919;</span> Current Detection</div>
+        <div id="det-idle" class="detect-idle">Waiting for an item&hellip;</div>
+        <div id="det-box" class="detect-row" style="display:none">
+          <div class="ring" id="ring"><span id="ring-pct">0%</span></div>
+          <div class="detect-info">
+            <div class="detect-label" id="det-label">-</div>
+            <div class="detect-sub" id="det-sub">-</div>
+          </div>
         </div>
-        <div class="pivot"><div class="platform" id="platform"></div></div>
-        <div class="post"></div>
-        <div class="servo-state" id="servo-state">FLAT</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span class="ic">&#9878;&#65039;</span> Sorting Platform</div>
+        <div class="stage">
+          <div class="stage-top">
+            <span>&#11013;&#65039; PLASTIC</span><span>PAPER &#10145;&#65039;</span>
+          </div>
+          <div class="seesaw">
+            <div class="platform" id="platform"></div>
+            <div class="pivot"></div>
+          </div>
+          <div class="bins">
+            <div class="bin" id="bin-l"><span class="bicon">&#128511;</span>PLASTIC</div>
+            <div class="bin" id="bin-r"><span class="bicon">&#128220;</span>PAPER</div>
+          </div>
+          <div class="servo-state" id="servo-state">FLAT</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span class="ic">&#128465;&#65039;</span> Bin Status</div>
+        <div class="binrow">
+          <span class="pill ok" id="bin-pill">OK</span>
+          <span class="dist" id="bin-dist">— cm</span>
+        </div>
       </div>
     </div>
-
-    <div class="panel">
-      <h2>Bin Status</h2>
-      <div class="bin-row">
-        <span class="pill ok" id="bin-pill">OK</span>
-        <span class="conf-txt" id="bin-dist">- cm</span>
-      </div>
-    </div>
-
   </div>
-</div>
 
-<div class="grid" style="margin-top:16px">
-  <!-- session stats + feedback -->
-  <div class="col">
-    <div class="panel">
-      <h2>Session Totals</h2>
-      <div class="tiles">
-        <div class="tile"><div class="n plastic" id="s-plastic">0</div><div class="k">Plastic</div></div>
-        <div class="tile"><div class="n paper"   id="s-paper">0</div><div class="k">Paper</div></div>
-        <div class="tile"><div class="n"         id="s-total">0</div><div class="k">Total</div></div>
+  <!-- ===== stats ===== -->
+  <div class="card" style="margin-top:18px">
+    <div class="card-h"><span class="ic">&#128202;</span> Session Totals</div>
+    <div class="stats">
+      <div class="stat s-plastic"><div class="edge"></div>
+        <div class="bign plastic" id="s-plastic">0</div><div class="lab">Plastic sorted</div></div>
+      <div class="stat s-paper"><div class="edge"></div>
+        <div class="bign paper" id="s-paper">0</div><div class="lab">Paper sorted</div></div>
+      <div class="stat s-total"><div class="edge"></div>
+        <div class="bign" id="s-total">0</div><div class="lab">Total items</div></div>
+    </div>
+  </div>
+
+  <!-- ===== bottom grid ===== -->
+  <div class="grid-bottom">
+    <div class="card">
+      <div class="card-h"><span class="ic">&#128203;</span> Recent Sorts</div>
+      <div class="feed" id="feed">
+        <div class="empty">No sorts yet&hellip;</div>
       </div>
     </div>
 
-    <div class="panel">
-      <h2>Help the AI Learn</h2>
+    <div class="card">
+      <div class="card-h"><span class="ic">&#129309;</span> Help the AI Learn</div>
       <div class="fb-q" id="fb-q">No sort to review yet.</div>
       <div class="fb-btns">
         <button class="fb up"   id="fb-up"   disabled>&#128077;</button>
@@ -217,25 +346,17 @@
     </div>
   </div>
 
-  <!-- log -->
-  <div class="panel">
-    <h2>Recent Sorts</h2>
-    <table>
-      <thead><tr><th>Time</th><th>Class</th><th>Conf.</th><th>Action</th></tr></thead>
-      <tbody id="log"><tr><td class="empty" colspan="4">No sorts yet&hellip;</td></tr></tbody>
-    </table>
-  </div>
+  <footer>
+    <b>EcoSort AI</b> &nbsp;&middot;&nbsp; Sense &rarr; Think &rarr; Act &nbsp;&middot;&nbsp;
+    the Raspberry Pi runs everything &mdash; this page is just the window.
+  </footer>
 </div>
-
-<footer>EcoSort AI &middot; Sense &rarr; Think &rarr; Act &middot; the Pi runs everything, this page is just the window.</footer>
 
 <script>
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-
-  var lastSortId = null;      // most recent sort id from the backend
-  var reviewedId = null;      // sort id the user already gave feedback on
+  var lastSortId = null, reviewedId = null;
 
   function fmtUptime(s) {
     s = s | 0;
@@ -244,83 +365,88 @@
     if (m) return m + "m " + ss + "s";
     return ss + "s";
   }
-
   function setConn(ok) {
     $("dot").className = "dot" + (ok ? " on" : "");
     $("conn").textContent = ok ? "live" : "reconnecting";
-    $("b-conn").className = "badge" + (ok ? " live" : "");
+    $("c-conn").className = "chip" + (ok ? " live" : "");
   }
 
   function render(s) {
-    // backends / header
     if (s.backends) {
-      $("b-cam").textContent = s.backends.camera || "-";
-      $("b-servo").textContent = s.backends.servo || "-";
-      $("b-model").textContent = s.backends.model || "-";
+      $("c-cam").textContent = s.backends.camera || "-";
+      $("c-servo").textContent = s.backends.servo || "-";
+      $("c-model").textContent = s.backends.model || "-";
     }
-    $("b-fps").textContent = s.fps != null ? s.fps : 0;
-    $("b-up").textContent = fmtUptime(s.uptime_sec);
+    $("c-fps").textContent = s.fps != null ? s.fps : 0;
+    $("c-up").textContent = fmtUptime(s.uptime_sec);
 
-    // current detection
+    // --- detection ---
     if (s.detection) {
-      $("det-idle").style.display = "none";
-      $("det-box").style.display = "block";
       var cls = s.detection.label;
       var conf = Math.round((s.detection.confidence || 0) * 100);
+      var colour = cls === "PLASTIC" ? "var(--blue)" : "var(--amber)";
+      $("det-idle").style.display = "none";
+      $("det-box").style.display = "flex";
       var el = $("det-label");
       el.textContent = cls;
-      el.className = "det-label " + (cls === "PLASTIC" ? "plastic" : "paper");
-      var bar = $("det-bar");
-      bar.style.width = conf + "%";
-      bar.style.background = cls === "PLASTIC"
-        ? "var(--blue)" : "var(--green)";
-      $("det-conf").textContent = "confidence " + conf + "%";
+      el.className = "detect-label " + (cls === "PLASTIC" ? "plastic" : "paper");
+      $("det-sub").textContent = cls === "PLASTIC"
+        ? "tilt platform LEFT" : "tilt platform RIGHT";
+      var ring = $("ring");
+      ring.style.setProperty("--pct", conf);
+      ring.style.setProperty("--c", colour);
+      $("ring-pct").textContent = conf + "%";
+      $("vid-tag-txt").textContent = cls + " " + conf + "%";
     } else {
       $("det-idle").style.display = "block";
       $("det-box").style.display = "none";
+      $("vid-tag-txt").textContent = "streaming";
     }
 
-    // servo platform tilt
+    // --- platform + bins ---
     var st = s.servo_state || "FLAT";
-    var plat = $("platform");
-    plat.className = "platform" +
+    $("platform").className = "platform" +
       (st === "TILT LEFT" ? " left" : st === "TILT RIGHT" ? " right" : "");
-    $("servo-state").textContent = st;
+    $("bin-l").className = "bin" + (st === "TILT LEFT" ? " active-l" : "");
+    $("bin-r").className = "bin" + (st === "TILT RIGHT" ? " active-r" : "");
+    $("servo-state").textContent = "Platform: " + st;
 
-    // bin
+    // --- bin status ---
     var pill = $("bin-pill");
     if (s.bin_full) { pill.className = "pill full"; pill.textContent = "FULL"; }
     else            { pill.className = "pill ok";   pill.textContent = "OK"; }
     $("bin-dist").textContent =
-      (s.bin_distance_cm != null ? s.bin_distance_cm.toFixed(1) : "-") + " cm";
+      (s.bin_distance_cm != null ? s.bin_distance_cm.toFixed(1) : "—") + " cm";
 
-    // stats
+    // --- stats ---
     if (s.stats) {
       $("s-plastic").textContent = s.stats.PLASTIC || 0;
       $("s-paper").textContent = s.stats.PAPER || 0;
       $("s-total").textContent = s.stats.total || 0;
     }
 
-    // recent sorts log
-    var log = $("log");
+    // --- feed ---
+    var feed = $("feed");
     if (s.events && s.events.length) {
-      log.innerHTML = s.events.map(function (e) {
-        var c = e.label === "PLASTIC" ? "plastic" : "paper";
-        return "<tr><td>" + e.timestamp + "</td>" +
-               "<td class='lbl " + c + "'>" + e.label + "</td>" +
-               "<td>" + Math.round((e.confidence || 0) * 100) + "%</td>" +
-               "<td>" + e.servo_action + "</td></tr>";
+      feed.innerHTML = s.events.map(function (e) {
+        var c = e.label === "PLASTIC" ? "l-plastic" : "l-paper";
+        var cc = e.label === "PLASTIC" ? "plastic" : "paper";
+        return "<div class='logrow " + c + "'>" +
+          "<span class='lr-label " + cc + "'>" + e.label + "</span>" +
+          "<span class='lr-conf'>" + Math.round((e.confidence || 0) * 100) + "%</span>" +
+          "<span class='lr-act'>" + e.servo_action + "</span>" +
+          "<span class='lr-time'>" + e.timestamp + "</span></div>";
       }).join("");
     } else {
-      log.innerHTML = "<tr><td class='empty' colspan='4'>No sorts yet&hellip;</td></tr>";
+      feed.innerHTML = "<div class='empty'>No sorts yet&hellip;</div>";
     }
 
-    // feedback availability
+    // --- feedback ---
     lastSortId = s.last_sort_id;
     if (lastSortId != null && lastSortId !== reviewedId) {
       var last = (s.events && s.events[0]) || null;
-      $("fb-q").textContent = last
-        ? "Was sort #" + lastSortId + " (" + last.label + ") correct?"
+      $("fb-q").innerHTML = last
+        ? "Was sort <b>#" + lastSortId + "</b> (" + last.label + ") correct?"
         : "Was the last sort correct?";
       $("fb-up").disabled = false;
       $("fb-down").disabled = false;
@@ -339,25 +465,21 @@
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sort_id: id, verdict: verdict })
-    })
-    .then(function (r) { return r.json(); })
-    .then(function (res) {
+    }).then(function (r) { return r.json(); }).then(function () {
       reviewedId = id;
       $("fb-msg").style.color = verdict === "up" ? "var(--green)" : "var(--amber)";
       $("fb-msg").textContent = verdict === "up"
-        ? "Thanks - logged as correct."
-        : "Saved for retraining. Thanks!";
-    })
-    .catch(function () {
+        ? "✓ Thanks — logged as correct."
+        : "✓ Saved for retraining. Thanks!";
+    }).catch(function () {
       $("fb-msg").style.color = "var(--red)";
       $("fb-msg").textContent = "Could not send feedback.";
     });
   }
-
   $("fb-up").addEventListener("click", function () { sendFeedback("up"); });
   $("fb-down").addEventListener("click", function () { sendFeedback("down"); });
 
-  // --- live status feed (Server-Sent Events) ---
+  // --- live status feed ---
   function connect() {
     var es = new EventSource("/api/events");
     es.onopen = function () { setConn(true); };
@@ -366,14 +488,11 @@
       try { render(JSON.parse(ev.data)); } catch (e) {}
     };
     es.onerror = function () {
-      setConn(false);
-      es.close();
-      setTimeout(connect, 2000);   // auto-reconnect
+      setConn(false); es.close(); setTimeout(connect, 2000);
     };
   }
   connect();
 
-  // if the MJPEG stream stalls, kick it
   $("stream").addEventListener("error", function () {
     var img = $("stream");
     setTimeout(function () { img.src = "/api/stream?t=" + Date.now(); }, 1500);
