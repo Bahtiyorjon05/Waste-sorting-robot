@@ -18,8 +18,13 @@ crashes the app, it just falls back to simulation.
 import logging
 import os
 import random
+import threading
 import time
 from typing import Any, Dict, Optional
+
+# A buffered camera frame older than this (seconds) is treated as "camera not
+# delivering" and capture() falls back to a synthetic frame.
+_FRAME_STALE_SEC = 2.5
 
 import numpy as np
 
@@ -70,6 +75,22 @@ class VisionAgent:
             self._init_opencv()
         elif self.camera_backend == "picamera2":
             self._init_picamera2()
+
+        # --- background capture thread ---
+        # A real camera is read on its own thread so that a stalled or
+        # disconnected camera can NEVER freeze the Sense-Think-Act loop.
+        # capture() just returns a synthetic frame when frames go stale.
+        self._frame_lock = threading.Lock()
+        self._latest_frame: Optional[np.ndarray] = None
+        self._latest_frame_ts: float = 0.0
+        self._capture_running = False
+        self._capture_thread: Any = None
+        if self.camera_backend in ("opencv", "picamera2"):
+            self._capture_running = True
+            self._capture_thread = threading.Thread(
+                target=self._capture_loop, daemon=True, name="camera-capture"
+            )
+            self._capture_thread.start()
 
         # --- load the YOLO model (optional) ---
         self._model: Any = None
@@ -173,22 +194,48 @@ class VisionAgent:
     # Capture
     # ------------------------------------------------------------------
     def capture(self) -> np.ndarray:
-        """Return one BGR frame. Always returns a frame (synthetic if needed)."""
-        if self.camera_backend == "opencv" and self._cap is not None:
-            ok, frame = self._cap.read()
-            if ok and frame is not None:
-                return frame
-            logger.debug("Webcam read failed; using synthetic frame.")
-        elif self.camera_backend == "picamera2" and self._picam is not None:
-            try:
+        """Return one BGR frame. Never blocks: returns the most recent real
+        frame, or a synthetic frame if the camera is not delivering."""
+        if self.camera_backend == "simulation":
+            return self._synthetic_frame("SIMULATION MODE - no camera")
+        with self._frame_lock:
+            frame = self._latest_frame
+            age = time.monotonic() - self._latest_frame_ts
+        if frame is not None and age < _FRAME_STALE_SEC:
+            return frame
+        return self._synthetic_frame("NO CAMERA SIGNAL - check the ribbon cable")
+
+    # ------------------------------------------------------------------
+    # Background capture thread (real cameras only)
+    # ------------------------------------------------------------------
+    def _capture_loop(self) -> None:
+        """Continuously read the real camera on a daemon thread. If the camera
+        hangs, only this thread stalls -- the main loop keeps running."""
+        while self._capture_running:
+            frame = self._grab_real_frame()
+            if frame is not None:
+                with self._frame_lock:
+                    self._latest_frame = frame
+                    self._latest_frame_ts = time.monotonic()
+            else:
+                time.sleep(0.2)   # brief pause before retrying a failed read
+
+    def _grab_real_frame(self) -> Optional[np.ndarray]:
+        """Grab one frame from the real camera. May block -- that is exactly
+        why it runs on its own thread."""
+        try:
+            if self.camera_backend == "opencv" and self._cap is not None:
+                ok, frame = self._cap.read()
+                return frame if ok and frame is not None else None
+            if self.camera_backend == "picamera2" and self._picam is not None:
                 arr = self._picam.capture_array()
                 # picamera2 hands back RGB; OpenCV wants BGR.
                 if cv2 is not None:
                     return cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
                 return arr
-            except Exception as exc:
-                logger.debug("picamera2 capture failed: %s", exc)
-        return self._synthetic_frame()
+        except Exception as exc:
+            logger.debug("camera read error: %s", exc)
+        return None
 
     # ------------------------------------------------------------------
     # Detection
@@ -308,7 +355,7 @@ class VisionAgent:
     # ------------------------------------------------------------------
     # Internal: synthetic camera frame for simulation mode
     # ------------------------------------------------------------------
-    def _synthetic_frame(self) -> np.ndarray:
+    def _synthetic_frame(self, message: str = "SIMULATION MODE") -> np.ndarray:
         """A dark 'conveyor belt' image so the live feed is never blank."""
         img = np.full((self._h, self._w, 3), 24, dtype=np.uint8)
         # belt
@@ -317,13 +364,16 @@ class VisionAgent:
         if cv2 is not None:
             for x in range(0, self._w, 60):
                 cv2.line(img, (x, belt_top), (x, belt_bot), (60, 60, 66), 1)
-            cv2.putText(img, "SIMULATION MODE - no camera connected",
-                        (int(self._w * 0.10), int(self._h * 0.93)),
+            cv2.putText(img, message,
+                        (int(self._w * 0.08), int(self._h * 0.93)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.55, (130, 130, 140), 1)
         return img
 
     # ------------------------------------------------------------------
     def shutdown(self) -> None:
+        self._capture_running = False
+        if self._capture_thread is not None:
+            self._capture_thread.join(timeout=2.0)
         if self._cap is not None:
             try:
                 self._cap.release()
