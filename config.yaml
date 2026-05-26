@@ -41,6 +41,10 @@ TARGET_FPS: 12             # how fast the Sense-Think-Act loop / live feed runs
 MODEL_PATH: "yolov8n.pt"
 CONFIDENCE_THRESHOLD: 0.50
 IOU_THRESHOLD: 0.45
+# YOLO inference image size. Smaller = much faster on a Pi CPU.
+#   320 -> ~3-4x faster than 640, small accuracy trade-off (recommended for Pi 4)
+#   640 -> highest accuracy, ~1 FPS on a Pi 4
+YOLO_IMGSZ: 320
 
 # CLASS_MAP: the model's class NAME  ->  EcoSort label (PLASTIC or PAPER).
 # The defaults below work with the standard yolov8n.pt model, so you can hold

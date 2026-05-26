@@ -1,16 +1,14 @@
 """
 orchestrator.py
 ================
-The Sense-Think-Act loop -- the heartbeat of EcoSort AI.
+The Think-and-Act loop -- the heartbeat of EcoSort AI.
 
-Runs on its own background thread (started by the FastAPI app) so the web
-server stays responsive. Every iteration it:
+VisionAgent runs its OWN three threads (capture, stream, detect) so the live
+video and YOLO inference never wait for each other. This orchestrator just:
 
-    SENSE  : grab a camera frame + read the bin sensor
-    THINK  : run YOLO inference -> {label, confidence}
-    ACT    : tilt the platform, record the sort in the database
-    PUBLISH: push the annotated frame + status into SharedState so the
-             dashboard shows everything live
+    READ   : the latest detection from vision, the bin sensor, the servo state
+    DECIDE : should we sort this item? (armed + not busy + not in cooldown)
+    ACT    : queue a tilt, record in the database, push the event to SharedState
 
 The loop never sorts the same item twice: after a tilt it 'disarms' and only
 re-arms once the platform is seen empty again (no detection).
@@ -49,16 +47,14 @@ class Orchestrator(threading.Thread):
         self._servo = ServoController(config)
         self._sensor = BinSensor(config)
 
-        self._target_fps = float(config.get("TARGET_FPS", 12))
         self._cooldown = float(config.get("COOLDOWN_SEC", 3.0))
+        # decision loop is light -- run a few times per second is plenty.
+        self._tick_interval = 0.15
 
         # loop bookkeeping
         self._armed = True               # ready to sort a new item?
         self._cooldown_until = 0.0
-        self._display_detection: Optional[Dict[str, Any]] = None
-        self._display_until = 0.0
         self._last_reload = 0.0
-        self._fps_ema = 0.0
 
         # tell the dashboard which backends are actually live
         state.backends = {
@@ -69,32 +65,20 @@ class Orchestrator(threading.Thread):
         }
         logger.info("Backends -> %s", state.backends)
 
+        # hand SharedState to vision so its stream + detect threads can run.
+        self._vision.start(state)
+
     # ------------------------------------------------------------------
     def run(self) -> None:
         logger.info("=" * 58)
-        logger.info("  EcoSort AI - Sense-Think-Act loop RUNNING")
+        logger.info("  EcoSort AI - Think-and-Act loop RUNNING")
         logger.info("=" * 58)
-        frame_budget = 1.0 / max(1.0, self._target_fps)
-
         while self._state.running:
-            t0 = time.monotonic()
             try:
                 self._tick()
-            except Exception as exc:  # never let one bad frame kill the loop
+            except Exception as exc:
                 logger.exception("Loop iteration error: %s", exc)
-
-            # pace the loop to the target FPS
-            elapsed = time.monotonic() - t0
-            if elapsed < frame_budget:
-                time.sleep(frame_budget - elapsed)
-
-            # rolling FPS estimate
-            dt = time.monotonic() - t0
-            inst_fps = 1.0 / dt if dt > 0 else 0.0
-            self._fps_ema = (0.85 * self._fps_ema + 0.15 * inst_fps
-                             if self._fps_ema else inst_fps)
-            self._state.fps = self._fps_ema
-
+            time.sleep(self._tick_interval)
         self._shutdown()
 
     # ------------------------------------------------------------------
@@ -106,41 +90,23 @@ class Orchestrator(threading.Thread):
             self._last_reload = now
             hot_reload(self._cfg_path, self._cfg)
 
-        # --- SENSE ---
-        frame = self._vision.capture()
-        detection = self._vision.detect(frame)
+        # --- READ (everything happens on its own thread elsewhere) ---
         self._sensor.update()
         self._state.bin_full = self._sensor.is_full
         self._state.bin_distance_cm = self._sensor.distance_cm
         self._state.servo_state = self._servo.state
 
-        # --- THINK + ACT ---
-        if detection is None:
-            self._armed = True            # platform looks empty -> re-arm
-        elif self._can_sort(now):
-            self._act(detection, now)
-
-        # keep the detection box on-screen briefly so the demo is readable
-        if detection is not None:
-            self._display_detection = detection
-            self._display_until = now + max(self._cooldown, 1.5)
-        elif now > self._display_until:
-            self._display_detection = None
-
-        # --- PUBLISH (annotated frame + status to the dashboard) ---
+        detection = self._vision.latest_detection()
         self._state.detection = (
             {k: detection[k] for k in ("label", "confidence")}
             if detection else None
         )
-        status = {
-            "servo_state": self._servo.state,
-            "bin_full": self._sensor.is_full,
-            "fps": self._state.fps,
-        }
-        annotated = self._vision.annotate(frame, self._display_detection, status)
-        jpeg = self._vision.encode_jpeg(annotated)
-        if jpeg is not None:
-            self._state.set_frame(jpeg)
+
+        # --- DECIDE + ACT ---
+        if detection is None:
+            self._armed = True            # platform looks empty -> re-arm
+        elif self._can_sort(now):
+            self._act(detection, now)
 
     # ------------------------------------------------------------------
     def _can_sort(self, now: float) -> bool:
