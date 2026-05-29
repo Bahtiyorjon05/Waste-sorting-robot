@@ -22,7 +22,25 @@ For auto-reload during development you can instead use:
 import argparse
 import logging
 import os
+import socket
 from contextlib import asynccontextmanager
+
+
+# Prefer pigpio for hardware-precise PWM (eliminates servo jitter that the
+# default lgpio backend has on non-hardware-PWM pins like GPIO17). Only set
+# this if the pigpio daemon is actually running, so the system still works on
+# machines where pigpio isn't installed.
+def _pigpio_running() -> bool:
+    try:
+        s = socket.create_connection(("localhost", 8888), timeout=0.5)
+        s.close()
+        return True
+    except Exception:
+        return False
+
+
+if _pigpio_running():
+    os.environ.setdefault("GPIOZERO_PIN_FACTORY", "pigpio")
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, HTMLResponse
