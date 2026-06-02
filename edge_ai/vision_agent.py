@@ -375,7 +375,25 @@ class VisionAgent:
                     self._det_for_draw = det
                     self._det_draw_until = now + _DETECTION_LINGER_SEC
 
+    def _enhance_for_detection(self, frame: np.ndarray) -> np.ndarray:
+        """Apply CLAHE to the L-channel before YOLO inference. Boosts contrast
+        in varying / dim / harsh lighting -- much better detection of crumpled
+        paper, dark plastics, items on busy backgrounds. The dashboard stream
+        still shows the original frame; this only feeds an enhanced copy to
+        the model."""
+        if cv2 is None:
+            return frame
+        try:
+            lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+            l, a, b = cv2.split(lab)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            l = clahe.apply(l)
+            return cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
+        except Exception:
+            return frame
+
     def _detect_yolo(self, frame: np.ndarray) -> Optional[Dict[str, Any]]:
+        frame = self._enhance_for_detection(frame)
         try:
             results = self._model.predict(
                 source=frame, conf=self._conf, iou=self._iou,
